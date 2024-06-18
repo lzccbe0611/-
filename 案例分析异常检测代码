@@ -1,0 +1,238 @@
+###################### 标准差法 #######################
+# 加载数据集
+data("airquality")
+
+# 计算平均值和标准差
+mean_ozone <- mean(airquality$Ozone, na.rm = TRUE)
+sd_ozone <- sd(airquality$Ozone, na.rm = TRUE)
+
+# 设定阈值，这里使用2个标准差
+lower_bound <- mean_ozone - 2 * sd_ozone
+upper_bound <- mean_ozone + 2 * sd_ozone
+
+# 识别异常值，同时排除NA值的影响
+outliers <- which(airquality$Ozone < lower_bound | airquality$Ozone > upper_bound, arr.ind = TRUE)
+
+# 输出异常值
+anomalies_sd <- airquality[outliers, ]
+
+# 绘图
+ggplot(airquality, aes(x = seq_along(Ozone), y = Ozone)) +
+  geom_point() +
+  geom_point(data = anomalies_sd, aes(x = outliers, y = Ozone), color = "red") +
+  labs(title = "Standard Deviation Method", x = "Index", y = "Ozone") +
+  theme_minimal()
+
+###################### 箱线图+四分位数 #######################
+library(dplyr)
+# 使用箱线图可视化Ozone数据，直观识别异常值
+ggplot(airquality, aes(x = "", y = Ozone)) +
+  geom_boxplot() +
+  labs(title = "Boxplot for Ozone in Air Quality Dataset",
+       y = "Ozone (ppb)",
+       x = "") +
+  theme_minimal()
+
+# 计算Ozone的四分位数，排除NA值
+Q1 <- quantile(airquality$Ozone, 0.25, na.rm = TRUE)
+Q3 <- quantile(airquality$Ozone, 0.75, na.rm = TRUE)
+IQR <- Q3 - Q1
+
+# 计算异常值的界限
+lower_bound <- Q1 - 1.5 * IQR
+upper_bound <- Q3 + 1.5 * IQR
+
+# 识别异常值
+outliers <- airquality %>%
+  filter(Ozone < lower_bound | Ozone > upper_bound, !is.na(Ozone))
+
+# 打印异常值
+print(outliers)
+
+# 绘图
+ggplot(airquality, aes(x = seq_along(Ozone), y = Ozone)) +
+  geom_point() +  
+  geom_point(data = outliers, aes(x = which(airquality$Ozone %in% outliers$Ozone), y = Ozone), color = "red") + 
+  labs(title = "Outlier Detection using IQR Method", x = "Index", y = "Ozone") +
+  theme_minimal()
+
+######################## Z得分法 ####################
+# 计算Ozone的平均值和标准差，排除NA值
+mean_Ozone <- mean(airquality$Ozone, na.rm = TRUE)
+sd_Ozone <- sd(airquality$Ozone, na.rm = TRUE)
+
+# 计算Z-得分
+z_scores <- (airquality$Ozone - mean_Ozone) / sd_Ozone
+
+# 识别异常值，这里使用绝对值大于2的Z-得分作为标准，同时排除NA值的影响
+outliers <- which(abs(z_scores) > 2 & !is.na(z_scores))
+
+# 输出异常值
+anomalies_z <- airquality[outliers, ]
+
+# 绘图
+ggplot(airquality, aes(x = seq_along(Ozone), y = Ozone)) +
+  geom_point() +
+  geom_point(data = anomalies_z, aes(x = outliers, y = Ozone), color = "red") +
+  labs(title = "Z-Score Method", x = "Index", y = "Ozone") +
+  theme_minimal()
+
+################# DBSCAN #####################
+library(dbscan)
+# 加载数据集
+data("airquality")
+
+# 去除含有NA的行
+airquality_clean <- na.omit(airquality)
+
+# 选择部分变量进行聚类（例如，Ozone和Wind）
+data_for_clustering <- airquality_clean[, c("Ozone", "Wind")]
+
+# 应用DBSCAN算法，eps和minPts参数需要根据数据调整
+dbscan_result <- dbscan(data_for_clustering, eps = 10, minPts = 5)
+
+# 查看结果
+print(dbscan_result)
+
+# 标记异常值（噪声点）
+airquality_clean$cluster <- dbscan_result$cluster
+outliers <- airquality_clean[airquality_clean$cluster == 0, ]
+
+# 输出异常值
+print(outliers)
+
+# 使用ggplot2绘图
+ggplot(airquality_clean, aes(x = Ozone, y = Wind)) +
+  geom_point(aes(color = factor(cluster)), size = 3) +
+  geom_point(data = outliers, aes(x = Ozone, y = Wind), color = "red", size = 4, shape = 17) +
+  labs(title = "DBSCAN Clustering with Anomalies Highlighted",
+       x = "Ozone (ppb)",
+       y = "Wind (mph)",
+       color = "Cluster") +
+  theme_minimal() +
+  scale_color_manual(values = c("0" = "black", "1" = "blue", "2" = "green"))
+
+####################### 局部异常因子（LOF） ###############
+library(DMwR2)
+# 加载数据集
+data("airquality")
+
+# 去除含有NA的行
+airquality_clean <- na.omit(airquality)
+
+# 选择部分变量进行LOF计算（例如，Ozone和Wind）
+data_for_lof <- airquality_clean[, c("Ozone", "Wind")]
+
+# 计算LOF分数，k是邻居的数量
+lof_scores <- lofactor(data_for_lof, k = 5)
+
+# 添加LOF分数到数据集
+airquality_clean$LOF_Score <- lof_scores
+
+# 识别异常值，这里可以选择LOF分数高于某个阈值的点作为异常值
+# 阈值的选择依赖于具体情况，这里我们假设选择大于2的LOF分数
+outliers <- airquality_clean[airquality_clean$LOF_Score > 2, ]
+
+# 输出异常值
+print(outliers)
+
+# 使用ggplot2绘图
+ggplot(airquality_clean, aes(x = Ozone, y = Wind)) +
+  geom_point(color = "blue", size = 3) +  # 原始数据点
+  geom_point(data = outliers, aes(x = Ozone, y = Wind), color = "red", size = 4, shape = 17) +  # 异常点
+  geom_text(data = outliers, aes(x = Ozone, y = Wind, label = round(LOF_Score, 2)), vjust = -1, color = "red") +  # 标注异常点的Anomaly_Score
+  labs(title = "LOF Anomaly Detection",
+       x = "Ozone (ppb)",
+       y = "Wind (mph)") +
+  theme_minimal()
+
+########################孤立森林（Isolation Forest）等值线版########
+# 加载数据集
+data("airquality")
+
+# 数据预处理：去除含有NA的行
+airquality_clean <- na.omit(airquality)
+
+# 计算适用的sample_size值
+sample_size <- as.integer(nrow(airquality_clean) / 2)
+
+# 训练孤立森林模型，显式设置sample_size
+iso <- isolationForest$new(sample_size = sample_size)
+iso$fit(airquality_clean)
+
+# 对数据进行异常值预测
+scores <- iso$predict(airquality_clean)$anomaly_score
+
+# 将异常分数添加到数据集中
+airquality_clean$Anomaly_Score <- scores
+
+# 确定异常值的阈值。这里我们选择异常分数高于95%分位数的数据点作为异常值
+threshold <- quantile(airquality_clean$Anomaly_Score, 0.95)
+
+# 筛选异常值
+outliers <- airquality_clean %>%
+  filter(Anomaly_Score > threshold)
+
+# 输出异常值
+print(outliers)
+
+# 使用ggplot2绘图
+ggplot(airquality_clean, aes(x = Ozone, y = Wind)) +
+  geom_point(aes(color = Anomaly_Score), size = 3) +  # 原始数据点，使用异常分数上色
+  geom_point(data = outliers, aes(x = Ozone, y = Wind), color = "red", size = 4, shape = 17) +  # 异常点
+  stat_density_2d(aes(fill = after_stat(level)), geom = "polygon", alpha = 0.3) +  # 等值线图
+  scale_fill_viridis_c(name = "Density Level") +  # 等值线填充颜色并命名图例
+  geom_text(data = outliers, aes(x = Ozone, y = Wind, label = round(Anomaly_Score, 2)), vjust = -1, color = "red") +  # 标注异常点的Anomaly_Score
+  labs(title = "Isolation Forest Anomaly Detection with Contour Lines",
+       x = "Ozone (ppb)",
+       y = "Wind (mph)",
+       color = "Anomaly Score") +
+  theme_minimal() +
+  theme(legend.position = "right")
+
+##################### 最近邻KNN ##########################
+library(dplyr)
+library(FNN)
+# 加载数据集
+data("airquality")
+
+# 数据预处理：去除含有NA的行
+airquality_clean <- na.omit(airquality)
+
+# 选择用于KNN计算的特征列，这里我们使用所有数值列
+# 注意：如果你的数据集中包含非数值列，请在此步骤中排除它们
+features <- airquality_clean %>% select_if(is.numeric)
+
+# 使用KNN进行异常值检测，这里我们选择K=5
+k <- 5
+knn_result <- get.knn(features, k = k)
+
+# 计算异常分数：使用到第K个最近邻的距离作为异常分数
+# get.knn函数返回的是一个列表，其中$nn.dist包含了到邻居的距离
+# 我们取每行的第K个距离作为异常分数
+anomaly_scores <- apply(knn_result$nn.dist, 1, function(x) x[k])
+
+# 将异常分数添加到数据集中
+airquality_clean$Anomaly_Score <- anomaly_scores
+
+# 确定异常值的阈值。这里我们选择异常分数高于95%分位数的数据点作为异常值
+threshold <- quantile(airquality_clean$Anomaly_Score, 0.95)
+
+# 筛选异常值
+outliers <- airquality_clean %>%
+  filter(Anomaly_Score > threshold)
+
+# 输出异常值
+print(outliers)
+
+# 使用ggplot2绘图
+ggplot(airquality_clean, aes(x = Ozone, y = Wind)) +
+  geom_point(aes(color = Anomaly_Score), size = 3) +  # 原始数据点，使用异常分数上色
+  geom_point(data = outliers, aes(x = Ozone, y = Wind), color = "red", size = 4, shape = 17) +  # 异常点
+  geom_text(data = outliers, aes(x = Ozone, y = Wind, label = round(Anomaly_Score, 2)), vjust = -1, color = "red") +  # 标注异常点的Anomaly_Score
+  labs(title = "KNN Anomaly Detection",
+       x = "Ozone (ppb)",
+       y = "Wind (mph)",
+       color = "Anomaly Score") +
+  theme_minimal() +
+  theme(legend.position = "right")
