@@ -1,0 +1,256 @@
+##################多元正态分布模型异常检测###################
+import numpy as np
+from sklearn.datasets import make_blobs
+from sklearn.metrics import roc_auc_score
+from pyod.utils import precision_n_scores
+import matplotlib.pyplot as plt
+#函数：生成数据集
+def generate_data(n_normal = 100, n_anomaly = 20):
+    X_normal, Y_normal = make_blobs(n_samples = n_normal, centers = [[0,0]],
+                                 cluster_std = 0.8, random_state = 5)    
+    np.random.seed(0)
+    X_anomaly_1 = np.random.rand(int(n_anomaly*0.5), 2)*4 + [-6, 1]
+    X_anomaly_2 = np.random.rand(int(n_anomaly*0.2), 2)*3 + [2.6, -0.2]
+    X_anomaly_3 = np.random.rand(int(n_anomaly*0.3), 2)*3 + [2.2, -3]
+    X_anomaly = np.vstack([X_anomaly_1, X_anomaly_2, X_anomaly_3])    
+    X = np.vstack([X_normal, X_anomaly])
+    Y = np.hstack([Y_normal, [1 for _ in range(X_anomaly.shape[0])]])
+    return X, Y
+#函数：计算数据在正态分布上的概率值
+def proba_Gaussian(X, mu, sigma):
+    d = len(mu)  #获取特征的维度
+    X -= mu.T
+    cov_mat_inv = np.linalg.pinv(sigma)
+    cov_mat_det = np.linalg.det(sigma)
+    p = (np.exp(-0.5 * np.dot(X, np.dot(cov_mat_inv, X.T)))
+        / (2. * np.pi) ** (d/2.) / np.sqrt(cov_mat_det))
+    return p
+#生成人工合成数据集
+X, y = generate_data(n_normal = 400,  n_anomaly = 20)
+# 可视化模拟的数据集
+plt.rcParams['font.sans-serif'] = ['SimHei']
+plt.rcParams['axes.unicode_minus'] = False
+
+plt.figure(figsize=(6, 4))
+predict_anomaly = X[y == 1]
+predict_normal = X[y == 0]
+plt.scatter(predict_normal[:, 0], predict_normal[:, 1],
+            s=60, marker='o', alpha=0.6, label='正常对象')
+plt.scatter(predict_anomaly[:, 0], predict_anomaly[:, 1], 
+            s=60, marker='^', c='r', label='异常对象')
+plt.legend()
+plt.title("模拟数据的可视化结果")
+plt.show()
+#性能评价：AUC和 Precision@n
+AUC = round(roc_auc_score(y, anomaly_prob), ndigits=4)
+precision_rank_n = round(precision_n_scores(y, anomaly_prob), ndigits=4)
+print("多元正态分布模型异常检测的AUC值:", AUC)
+print("多元正态分布模型异常检测的precision@n值:", precision_rank_n )
+
+#####################KNN异常检测####################
+import numpy as np
+from pyod.models.knn import KNN
+from sklearn.datasets import make_blobs
+from pyod.utils import precision_n_scores
+from sklearn.metrics import roc_auc_score
+import matplotlib.pyplot as plt
+import seaborn as sns
+#函数：生成数据集
+def generate_data(n_normal = 100, n_anomaly = 20):
+    X_normal, Y_normal = make_blobs(n_samples = n_normal, centers = [[0,0]],
+                                 cluster_std = 0.8, random_state = 5)    
+    np.random.seed(0)
+    X_anomaly_1 = np.random.rand(int(n_anomaly*0.5), 2)*4 + [-6, 1]
+    X_anomaly_2 = np.random.rand(int(n_anomaly*0.2), 2)*3 + [2.6, -0.2]
+    X_anomaly_3 = np.random.rand(int(n_anomaly*0.3), 2)*3 + [2.2, -3]
+    X_anomaly = np.vstack([X_anomaly_1, X_anomaly_2, X_anomaly_3])    
+    X = np.vstack([X_normal, X_anomaly])
+    Y = np.hstack([Y_normal, [1 for _ in range(X_anomaly.shape[0])]])
+    return X, Y
+#生成人工合成数据集
+X, y = generate_data(n_normal = 400,  n_anomaly = 20)
+#训练和测试KNN异常检测模型
+clf = KNN(contamination = 0.05, method = 'largest')     #创建KNN模型
+clf.fit(X)
+test_scores = clf.decision_function(X)    #异常得分
+pred_y = clf.predict(X)                #获得判别结果
+pred_y_proba =  clf.predict_proba(X)   #获得概率输出
+AUC = round(roc_auc_score(y, pred_y_proba[:,1]), ndigits = 4)
+precision_rank_n = round(precision_n_scores(y, pred_y_proba[:,1]), ndigits = 4)
+print("KNN异常检测模型的AUC:", AUC)
+print("KNN异常检测模型的precision@n:", precision_rank_n )
+#绘图显示KNN模型的异常识别结果
+plt.rcParams['font.sans-serif']=['SimHei'] 
+plt.rcParams['axes.unicode_minus'] = False
+
+plt.figure(figsize = (6, 5))
+anomaly_index = pred_y == 1
+predict_anomaly = X[anomaly_index]
+predict_normal = X[~anomaly_index]
+
+plt.scatter(predict_normal[:, 0], predict_normal[:, 1],
+            s = 60, marker = 'o', alpha = 0.6, label = '正常对象')
+plt.scatter(predict_anomaly[:, 0], predict_anomaly[:, 1], 
+            s = 60, marker = '^', c = 'r', label = '异常对象')
+plt.legend()
+plt.title("KNN模型异常检测的结果")
+plt.show()
+
+##############LOF异常检测########################
+import numpy as np
+from sklearn.datasets import make_blobs
+from pyod.models.lof import LOF
+from sklearn.metrics import roc_auc_score
+from pyod.utils import precision_n_scores
+import matplotlib.pyplot as plt
+#函数：生成数据集
+def generate_data(n_normal = 100, n_anomaly = 20):
+    X_normal, Y_normal = make_blobs(n_samples = n_normal, centers = [[0,0]],
+                                 cluster_std = 0.8, random_state = 5)    
+    np.random.seed(0)
+    X_anomaly_1 = np.random.rand(int(n_anomaly*0.5), 2)*4 + [-6, 1]
+    X_anomaly_2 = np.random.rand(int(n_anomaly*0.2), 2)*3 + [2.6, -0.2]
+    X_anomaly_3 = np.random.rand(int(n_anomaly*0.3), 2)*3 + [2.2, -3]
+    X_anomaly = np.vstack([X_anomaly_1, X_anomaly_2, X_anomaly_3])    
+    X = np.vstack([X_normal, X_anomaly])
+    Y = np.hstack([Y_normal, [1 for _ in range(X_anomaly.shape[0])]])
+    return X, Y
+#生成人工合成数据集
+X, y = generate_data(n_normal = 400,  n_anomaly = 20)
+#构建和训练LOF模型
+clf = LOF(n_neighbors = 20, contamination = 0.05)
+clf.fit(X)
+lof_score = clf.decision_function(X)      #获得异常得分
+pred_y =clf.predict(X)                 #获得判别结果
+pred_y_proba = clf.predict_proba(X)     #获得异常概率输出
+#绘图显示LOF模型的异常识别结果
+plt.rcParams['font.sans-serif']=['SimHei'] 
+plt.rcParams['axes.unicode_minus'] = False
+
+plt.figure(figsize = (6, 5))
+anomaly_index = pred_y == 1
+predict_anomaly = X[anomaly_index]
+predict_normal = X[~anomaly_index]
+plt.scatter(predict_normal[:, 0], predict_normal[:, 1],
+            s = 60, marker = 'o', alpha = 0.6, label = '正常对象')
+plt.scatter(predict_anomaly[:, 0], predict_anomaly[:, 1], 
+            s = 60, marker = '^', c = 'r', label = '异常对象')
+plt.legend()
+plt.title("LOF模型异常检测的结果")
+plt.show()
+#模型性能评价： AUC和 Precision@n
+AUC = round(roc_auc_score(y, pred_y_proba[:,1]), ndigits = 4)
+precision_rank_n = round(precision_n_scores(y, pred_y_proba[:, 1]), ndigits = 4)
+print("LOF异常检测模型的AUC值:", AUC)
+print("LOF异常检测模型的precision@n值:", precision_rank_n )
+
+##################孤立森林异常检测#####################
+import numpy as np
+from sklearn.datasets import  make_blobs
+from pyod.models.iforest import IForest
+from sklearn.metrics import roc_auc_score
+from pyod.utils import precision_n_scores
+import matplotlib.pyplot as plt
+import seaborn as sns
+#函数：生成数据集
+def generate_data(n_normal = 100, n_anomaly = 20):
+    X_normal, Y_normal = make_blobs(n_samples = n_normal, centers = [[0,0]],
+                                 cluster_std = 0.8, random_state = 5)    
+    np.random.seed(0)
+    X_anomaly_1 = np.random.rand(int(n_anomaly*0.5), 2)*4 + [-6, 1]
+    X_anomaly_2 = np.random.rand(int(n_anomaly*0.2), 2)*3 + [2.6, -0.2]
+    X_anomaly_3 = np.random.rand(int(n_anomaly*0.3), 2)*3 + [2.2, -3]
+    X_anomaly = np.vstack([X_anomaly_1, X_anomaly_2, X_anomaly_3])    
+    X = np.vstack([X_normal, X_anomaly])
+    Y = np.hstack([Y_normal, [1 for _ in range(X_anomaly.shape[0])]])
+    return X, Y
+#生成人工合成数据集
+X, y = generate_data(n_normal = 400,  n_anomaly = 20)
+#训练和测试IForest异常检测模型
+clf = IForest(n_estimators = 300, contamination = 0.05 )   
+clf.fit(X)
+
+test_scores = clf.decision_function(X)       #异常得分
+pred_y = clf.predict(X)                   #获得判别结果
+pred_y_proba = clf.predict_proba(X)        #获得概率性输出
+
+AUC = round(roc_auc_score(y, pred_y_proba[:,1]), ndigits = 4)
+precision_rank_n = round(precision_n_scores(y, pred_y_proba[:,1]), ndigits = 4)
+
+print("孤立森林异常检测模型的AUC:", AUC)
+print("孤立森林异常检测模型的precision@n:", precision_rank_n )
+#绘图显示IForest模型的异常识别结果
+plt.rcParams['font.sans-serif']=['SimHei'] 
+plt.rcParams['axes.unicode_minus'] = False
+
+plt.figure(figsize = (6, 5))
+anomaly_index = pred_y == 1
+predict_anomaly = X[anomaly_index]
+predict_normal = X[~anomaly_index]
+plt.scatter(predict_normal[:, 0], predict_normal[:, 1],
+            s = 60, marker = 'o', alpha = 0.6, label = '正常对象')
+plt.scatter(predict_anomaly[:, 0], predict_anomaly[:, 1], 
+            s = 60, marker = '^', c = 'r', label = '异常对象')
+plt.legend()
+plt.title("孤立森林模型异常检测的结果")
+plt.show()
+
+######################一类支持向量机异常检测#####################
+import numpy as np
+import matplotlib.pyplot as plt
+from pyod.models.ocsvm import OCSVM
+from sklearn import svm
+from sklearn.datasets import  make_blobs
+from sklearn.metrics import roc_auc_score
+from pyod.utils import precision_n_scores
+import pandas as pd
+xx, yy= np.meshgrid(np.linspace(-6,6,500), np.linspace(-3,5,500))
+#函数：生成数据集
+def generate_data(n_normal = 100, n_anomaly = 20):
+    X_normal, Y_normal = make_blobs(n_samples = n_normal, centers = [[0,0]],
+                                 cluster_std = 0.8, random_state = 5)    
+    np.random.seed(0)
+    X_anomaly_1 = np.random.rand(int(n_anomaly*0.5), 2)*4 + [-6, 1]
+    X_anomaly_2 = np.random.rand(int(n_anomaly*0.2), 2)*3 + [2.6, -0.2]
+    X_anomaly_3 = np.random.rand(int(n_anomaly*0.3), 2)*3 + [2.2, -3]
+    X_anomaly = np.vstack([X_anomaly_1, X_anomaly_2, X_anomaly_3])    
+    X = np.vstack([X_normal, X_anomaly])
+    Y = np.hstack([Y_normal, [1 for _ in range(X_anomaly.shape[0])]])
+    return X, Y
+#生成人工合成数据集
+X, y = generate_data(n_normal = 400,  n_anomaly = 20)
+# fit the model
+
+clf= svm.OneClassSVM(nu=0.1, kernel='rbf', gamma=0.2)
+clf.fit(X)
+test_scores = clf.decision_function(X)       #异常得分
+pred_y = clf.predict(X)                   #获得判别结果
+#pred_y_proba = clf.predict_proba(X)        #获得概率性输出
+#将-1替换为1， 1替换为0（正常）
+pred_y = pd.Series(pred_y).replace([-1,1],[1,0])
+  
+AUC = round(roc_auc_score(y, pred_y), ndigits = 4)
+precision_rank_n = round(precision_n_scores(y, pred_y), ndigits = 4)
+print("OCSVM异常检测模型的AUC:", AUC)
+print("OCSVM异常检测模型的precision@n:", precision_rank_n )
+# plot the line , the points, and the nearest vectors to the plane
+Z= clf.decision_function(np.c_[xx.ravel(), yy.ravel()])
+Z= Z.reshape(xx.shape)
+anomaly_index = pred_y == 1
+predict_anomaly = X[anomaly_index]
+predict_normal = X[~anomaly_index]
+#绘图
+plt.figure(figsize = (6, 5))
+plt.rcParams['font.sans-serif']=['SimHei']
+plt.rcParams['axes.unicode_minus'] = False
+# 填充等高线图
+plt.contourf(xx, yy, Z, levels=np.linspace(Z.min(),0,7), cmap=plt.cm.PuBu)
+# 绘制等高线
+plt.contour(xx, yy, Z, levels=[0, Z.max()], colors='palevioletred')
+plt.scatter(predict_normal[:, 0], predict_normal[:, 1],
+            s = 60, marker = 'o', c='b',alpha = 0.6, label = '正常对象')
+plt.scatter(predict_anomaly[:, 0], predict_anomaly[:, 1], 
+            s = 60, marker = '^', c = 'r', label = '异常对象')
+plt.legend()
+plt.title("OCSVM模型异常检测的结果")
+  
